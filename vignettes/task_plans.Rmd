@@ -366,3 +366,7 @@ Occassionally at the end of a task plan, you'll want to combine all individual t
 
 Note that for the combiner to receive the correct step name (in this case, the `png` files), we need to specify the proper final step and ensure each task does not have a indicator file. In this case, we've set `final_steps = visualize` and `add_complete = FALSE` in our `create_task_plan` function.
 
+Now, we have a GIF that combines all of our state plots. 
+
+![](all_states.gif)
+
