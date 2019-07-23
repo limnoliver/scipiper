@@ -1,7 +1,8 @@
 ## Task Plans {.tabset .tabset-fade .tabset-pills}
 
 Alison Appling May 23, 2018;  
-Lindsay Platt February 20, 2019
+Lindsay Platt February 20, 2019;
+Sam Oliver July 22, 2019
 
 ---
 output: rmarkdown::html_vignette
@@ -175,13 +176,12 @@ Here's how to create a task makefile from a task plan:
 
 ```{r makefile, results='markup'}
 create_task_makefile(
-  task_plan=task_plan_1,
-  makefile='task_plan_1.yml',
-  include=c(),
-  packages=c('ggplot2'),
-  sources=c('script.R'),
-  file_extensions=c('ind'),
-  ind_complete=TRUE)
+  task_plan = task_plan_1,
+  makefile = 'task_plan_1.yml',
+  include = c(),
+  packages = c('ggplot2'),
+  sources = c('script.R'),
+  file_extensions = c('ind'))
 ```
 
 Here are the contents of task_plan_1.yml:
@@ -190,8 +190,11 @@ Here are the contents of task_plan_1.yml:
 cat(readr::read_lines('task_plan_1.yml'), sep='\n')
 ```
 
-Note that at the end of each state's task list is a final task, e.g., `states/log/WI.ind`, that we didn't directly specify in the task_plan. These recipes for the `complete` step were generated in `create_task_plan` as described above. These .ind files representing the completeness of each task are also used as the dependencies of the final target, `task_plan_1`, which describes all targets that must be complete to consider the whole task batch complete.
+Note that at the end of each state's task list is a final task, e.g., `states/log/WI.ind`, that we didn't directly specify in the task_plan. These recipes for the `complete` step were generated in `create_task_plan` as described above. These .ind files representing the completeness of each task are also used as the dependencies of the final target, `task_plan_1.ind_promise`, which describes all targets that must be complete to consider the whole task batch complete. In this case, we're using the default `scipiper` combiner `combine_to_ind` to generate the final target, which simply adds the final step from each task (in this case, the `states/log/[statename].ind` files) and hash to `states/log/task_plan_1.ind`: 
 
+![](default_combiner.PNG)
+
+See the section on combiners for additional flexibility in ways to combine tasks into a final target.
 
 #### Executing a task plan/makefile
 
@@ -205,7 +208,7 @@ unlink('build')
 ```{r loop1a}
 loop_tasks(
   task_plan=task_plan_1,
-  task_makefile='task_plan_1.yml')
+  task_makefile='task_plan_1.yml', force = TRUE)
 ```
 
 The benefits of using `loop_tasks` to run all the remake targets in task_plan_1.yml are:
@@ -272,7 +275,8 @@ loop_tasks(
 As discussed previously, sometimes `loop_tasks` is very slow and you can use `scmake` to execute all targets of a task makefile instead. Similar to `loop_tasks`, `force=TRUE` can be used in this context. The `scmake` version of the previous code chunk is:
 
 ```{r rebuild_all_scmake}
-scmake('task_plan_1', 'task_plan_1.yml', force = TRUE)
+non_group_targets <- tail(list_all_targets('task_plan_1.yml'), -1L)
+scmake(non_group_targets, 'task_plan_1.yml', force = TRUE)
 ```
 
 ### Developing a successful loop
@@ -282,7 +286,8 @@ Not analyses will go smoothly the first time you try. You can use `loop_tasks` t
 Before we can demonstrate, we'll need to delete all output files and remake status information again:
 
 ```{r delete_all2}
-scdel(target_names=list_all_targets('task_plan_1.yml'), remake_file='task_plan_1.yml')
+non_group_targets <- tail(list_all_targets('task_plan_1.yml'), -1L)
+scdel(non_group_targets, remake_file='task_plan_1.yml')
 ```
 
 You can specify an intersection of tasks and steps that you want to run. For example, let's only run the prep step for PA first:
@@ -334,7 +339,7 @@ task_plan_2 <- create_task_plan(
   add_complete=FALSE)
 ```
 
-To avoid creating an indicator file when the entire batch is complete, set `ind_complete=FALSE` in `create_task_makefile`:
+To avoid combining the outputs of a task plan when the entire batch is complete, set `finalize_fun = NULL` in `create_task_makefile`:
 
 ```{r makefile2, results='markup'}
 create_task_makefile(
@@ -344,7 +349,7 @@ create_task_makefile(
   packages=c('ggplot2'),
   sources=c('script.R'),
   file_extensions=c('ind'),
-  ind_complete=FALSE)
+  finalize_fun = NULL)
 ```
 
 Now here are the contents of task_plan_2.yml, which will not create any `.ind` files:
@@ -352,3 +357,12 @@ Now here are the contents of task_plan_2.yml, which will not create any `.ind` f
 ```{r read_makefile2, results='markup', comment='', echo=FALSE}
 cat(readr::read_lines('task_plan_2.yml'), sep='\n')
 ```
+
+### Using task combiners
+
+Occassionally at the end of a task plan, you'll want to combine all individual tasks into a final product. An example might be that you want to combine several NWIS data pulls into a single file, and upload it to a shared cache. Or, you want to take multiple `png` files and turn them into a GIF or report. Arguments withing `create_task_makefile` allow you to write combiner functions that have access to the final step in each task and the final target name. In this example, we want to create a GIF out of several state-specific png files. We'll write our own combiner called `combine_to_gif` which will create the final target `figures/all_states.gif` and the corresponding indicator file.
+
+![](custom_combiners.PNG)
+
+Note that for the combiner to receive the correct step name (in this case, the `png` files), we need to specify the proper final step and ensure each task does not have a indicator file. In this case, we've set `final_steps = visualize` and `add_complete = FALSE` in our `create_task_plan` function.
+
